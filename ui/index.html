@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>⚡ Groq DS Co-Pilot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+:root{
+  --bg:#0d0a08;--surface:rgba(255,255,255,.04);--surface2:rgba(255,255,255,.07);
+  --border:rgba(255,255,255,.08);--accent:#f55036;--accent-light:#ff9a76;
+  --green:#10b981;--red:#ef4444;--amber:#f59e0b;--blue:#3b82f6;
+  --text:#e8e2dc;--muted:#a89f97;--font:'Inter',sans-serif;--mono:'JetBrains Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh;overflow-x:hidden}
+
+/* ── Background grid ── */
+body::before{
+  content:'';position:fixed;inset:0;
+  background-image:linear-gradient(rgba(245,80,54,.06) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(245,80,54,.06) 1px,transparent 1px);
+  background-size:40px 40px;pointer-events:none;z-index:0;
+}
+
+.container{max-width:1400px;margin:0 auto;padding:0 24px;position:relative;z-index:1}
+
+/* ── Header ── */
+header{padding:28px 0 20px;border-bottom:1px solid var(--border);margin-bottom:32px}
+.header-inner{display:flex;align-items:center;gap:16px}
+.logo{width:44px;height:44px;background:linear-gradient(135deg,var(--accent),#ff9a76);border-radius:12px;
+  display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;
+  box-shadow:0 0 20px rgba(245,80,54,.4)}
+h1{font-size:1.5rem;font-weight:700;background:linear-gradient(90deg,#fff,var(--accent-light));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{font-size:.8rem;color:var(--muted);margin-top:2px}
+.badge{margin-left:auto;padding:5px 12px;border-radius:20px;font-size:.72rem;font-weight:600;
+  border:1px solid;letter-spacing:.03em}
+.badge.groq{border-color:rgba(245,80,54,.5);color:var(--accent-light);background:rgba(245,80,54,.1)}
+
+/* ── Upload area ── */
+.upload-section{margin-bottom:32px}
+.dropzone{
+  border:2px dashed rgba(245,80,54,.35);border-radius:20px;padding:48px 24px;
+  text-align:center;cursor:pointer;transition:all .3s;background:rgba(245,80,54,.04);
+  position:relative;overflow:hidden;
+}
+.dropzone:hover,.dropzone.drag-over{
+  border-color:var(--accent);background:rgba(245,80,54,.09);
+  box-shadow:0 0 30px rgba(245,80,54,.2),inset 0 0 30px rgba(245,80,54,.05);
+}
+.dropzone::before{
+  content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;
+  background:conic-gradient(transparent 0deg,rgba(245,80,54,.1) 60deg,transparent 120deg);
+  animation:spin 8s linear infinite;opacity:0;transition:opacity .3s;
+}
+.dropzone:hover::before{opacity:1}
+@keyframes spin{to{transform:rotate(360deg)}}
+.upload-icon{font-size:3rem;margin-bottom:12px;display:block}
+.dropzone h2{font-size:1.1rem;font-weight:600;margin-bottom:6px}
+.dropzone p{color:var(--muted);font-size:.85rem}
+.file-badge{display:inline-flex;align-items:center;gap:8px;margin-top:14px;
+  background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);
+  color:var(--green);padding:6px 14px;border-radius:8px;font-size:.82rem;font-weight:500;display:none}
+#fileInput{display:none}
+.run-btn{
+  width:100%;margin-top:16px;padding:14px;border-radius:12px;border:none;cursor:pointer;
+  font-family:var(--font);font-size:1rem;font-weight:600;letter-spacing:.02em;
+  background:linear-gradient(135deg,var(--accent),#d9381e);color:#fff;
+  transition:all .25s;box-shadow:0 4px 20px rgba(245,80,54,.35);display:none;
+}
+.run-btn:hover{transform:translateY(-1px);box-shadow:0 6px 28px rgba(245,80,54,.5)}
+.run-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+
+/* ── Pipeline ── */
+.pipeline-section{margin-bottom:28px;display:none}
+.pipeline-section h3{font-size:.8rem;font-weight:600;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.1em;margin-bottom:16px}
+.pipeline{display:flex;align-items:center;gap:0;overflow-x:auto;padding-bottom:8px;flex-wrap:nowrap}
+.node-step{display:flex;align-items:center;flex-shrink:0}
+.node-pill{
+  display:flex;flex-direction:column;align-items:center;gap:5px;padding:10px 14px;
+  border-radius:12px;border:1px solid var(--border);background:var(--surface);
+  transition:all .4s;min-width:82px;cursor:default;position:relative;
+}
+.node-pill .icon{font-size:1.3rem}
+.node-pill .name{font-size:.62rem;color:var(--muted);text-align:center;line-height:1.2;font-weight:500}
+.node-pill.active{border-color:var(--accent);background:rgba(245,80,54,.15);
+  box-shadow:0 0 16px rgba(245,80,54,.3)}
+.node-pill.active::after{content:'';position:absolute;inset:-1px;border-radius:12px;
+  border:1px solid var(--accent);animation:pulse-border 1.5s ease-in-out infinite}
+@keyframes pulse-border{0%,100%{opacity:1}50%{opacity:.3}}
+.node-pill.done{border-color:rgba(16,185,129,.5);background:rgba(16,185,129,.1)}
+.node-pill.done .icon::after{content:' ✓';font-size:.65rem;color:var(--green)}
+.node-pill.error{border-color:rgba(239,68,68,.5);background:rgba(239,68,68,.1)}
+.connector{width:24px;height:2px;background:var(--border);flex-shrink:0;position:relative;overflow:hidden}
+.connector.active{background:var(--accent)}
+.connector::after{content:'';position:absolute;top:0;left:-100%;width:100%;height:100%;
+  background:linear-gradient(90deg,transparent,var(--accent-light),transparent);
+  animation:flow 1.5s linear infinite}
+@keyframes flow{to{left:100%}}
+
+/* ── Main 2-col layout ── */
+.main-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px}
+@media(max-width:900px){.main-grid{grid-template-columns:1fr}}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  overflow:hidden;display:flex;flex-direction:column}
+.panel-header{padding:14px 18px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:8px;flex-shrink:0}
+.panel-header h3{font-size:.82rem;font-weight:600;color:var(--text)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.dot.green{background:var(--green);box-shadow:0 0 6px var(--green)}
+.dot.red{background:var(--red);box-shadow:0 0 6px var(--red)}
+.dot.accent{background:var(--accent);box-shadow:0 0 6px var(--accent)}
+.dot.amber{background:var(--amber);box-shadow:0 0 6px var(--amber)}
+.panel-body{padding:0;overflow-y:auto;flex:1;max-height:380px}
+
+/* ── Terminal log ── */
+#logPanel .panel-body{background:#0a0a14;padding:12px 14px;font-family:var(--mono);font-size:.77rem;scrollbar-width:thin}
+.log-line{padding:2px 0;line-height:1.6;animation:fadein .3s ease}
+@keyframes fadein{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.log-line.info{color:#a89f97}
+.log-line.success{color:var(--green)}
+.log-line.error{color:var(--red)}
+.log-line.warn{color:var(--amber)}
+.log-line.purple{color:var(--accent-light)}
+.log-ts{color:#5c5148;margin-right:6px}
+
+/* ── Code viewer ── */
+#codePanel .panel-body{position:relative;overflow:hidden}
+#codePanel pre{margin:0!important;border-radius:0!important;font-size:.73rem!important;min-height:200px}
+#codePanel code{font-family:var(--mono)!important}
+.code-meta{padding:6px 14px;background:#0d1117;border-bottom:1px solid var(--border);
+  font-family:var(--mono);font-size:.68rem;color:var(--muted);display:flex;justify-content:space-between}
+
+/* ── Error / RAG panels ── */
+.error-panel{background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  margin-bottom:20px;overflow:hidden;display:none}
+.error-panel.show{display:block;border-color:rgba(239,68,68,.4)}
+.error-panel .panel-header{background:rgba(239,68,68,.08)}
+.error-body{padding:14px 18px;font-family:var(--mono);font-size:.74rem;color:#fca5a5;
+  white-space:pre-wrap;max-height:200px;overflow-y:auto;line-height:1.6}
+.rag-panel{background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  margin-bottom:20px;overflow:hidden;display:none}
+.rag-panel.show{display:block;border-color:rgba(245,80,54,.4)}
+.rag-panel .panel-header{background:rgba(245,80,54,.08)}
+.rag-body{padding:14px 18px;font-size:.78rem;color:#ffb59e;max-height:220px;overflow-y:auto;line-height:1.6;white-space:pre-wrap}
+.repair-badge{display:inline-block;background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.3);
+  color:var(--green);padding:3px 10px;border-radius:6px;font-size:.7rem;margin-bottom:8px}
+
+/* ── Dataset info card ── */
+.info-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;padding:14px 18px;margin-bottom:20px;display:none}
+.info-card{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center}
+.info-card .val{font-size:1.3rem;font-weight:700;color:var(--accent-light)}
+.info-card .lbl{font-size:.68rem;color:var(--muted);margin-top:4px}
+
+/* ── Results section ── */
+.results-section{display:none;margin-bottom:32px}
+.results-section h2{font-size:1.2rem;font-weight:700;background:linear-gradient(90deg,var(--green),#34d399);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  margin-bottom:20px}
+.charts-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-bottom:24px}
+.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;
+  overflow:hidden;transition:all .3s;cursor:pointer}
+.chart-card:hover{transform:translateY(-3px);box-shadow:0 8px 30px rgba(0,0,0,.4);border-color:var(--accent)}
+.chart-card img{width:100%;display:block;aspect-ratio:4/3;object-fit:cover}
+.chart-card .chart-label{padding:10px 14px;font-size:.78rem;color:var(--muted);font-weight:500}
+.report-card,.script-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;
+  overflow:hidden;margin-bottom:16px}
+.report-card .panel-header,.script-card .panel-header{padding:12px 18px}
+.report-body{padding:20px 24px;max-height:500px;overflow-y:auto;
+  font-size:.85rem;line-height:1.8;color:var(--text)}
+.report-body h1,.report-body h2,.report-body h3{color:var(--accent-light);margin:16px 0 8px}
+.report-body h1{font-size:1.2rem}
+.report-body h2{font-size:1rem}
+.report-body ul{margin-left:20px;margin-bottom:8px}
+.report-body li{margin-bottom:4px}
+.report-body hr{border:none;border-top:1px solid var(--border);margin:16px 0}
+.report-body strong{color:#f1f5f9}
+.report-body em{color:var(--muted)}
+.report-body code{font-family:var(--mono);font-size:.8em;background:rgba(245,80,54,.15);
+  padding:2px 6px;border-radius:4px;color:var(--accent-light)}
+
+/* ── Lightbox ── */
+.lightbox{position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:9999;display:none;
+  align-items:center;justify-content:center;padding:20px}
+.lightbox.show{display:flex}
+.lightbox img{max-width:90vw;max-height:90vh;border-radius:8px;box-shadow:0 0 60px rgba(0,0,0,.8)}
+.lightbox-close{position:absolute;top:20px;right:24px;font-size:2rem;cursor:pointer;color:#fff;
+  width:40px;height:40px;display:flex;align-items:center;justify-content:center;
+  border-radius:50%;background:rgba(255,255,255,.1);transition:background .2s}
+.lightbox-close:hover{background:rgba(255,255,255,.2)}
+
+/* ── Status bar ── */
+.status-bar{position:fixed;bottom:0;left:0;right:0;z-index:100;
+  background:rgba(13,10,8,.8);backdrop-filter:blur(12px);
+  border-top:1px solid var(--border);padding:10px 24px;
+  display:flex;align-items:center;gap:12px;font-size:.75rem;color:var(--muted)}
+.status-dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex-shrink:0}
+.status-dot.running{background:var(--accent);animation:blink 1s ease-in-out infinite}
+.status-dot.done{background:var(--green)}
+.status-dot.error{background:var(--red)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+</style>
+</head>
+<body>
+
+<!-- ── HEADER ── -->
+<header>
+  <div class="container">
+    <div class="header-inner">
+      <div class="logo">⚡</div>
+      <div>
+        <h1>Autonomous Data Science Co-Pilot</h1>
+        <div class="subtitle">LangChain · LangGraph · Groq · RAG · Self-Correcting</div>
+      </div>
+      <span class="badge groq">Groq · Llama 3.3 70B</span>
+    </div>
+  </div>
+</header>
+
+<div class="container" style="padding-bottom:60px">
+
+  <!-- ── UPLOAD ── -->
+  <div class="upload-section">
+    <div class="dropzone" id="dropzone">
+      <span class="upload-icon">📈</span>
+      <h2>Drop your CSV file here</h2>
+      <p>or click to browse · Supports any tabular CSV dataset</p>
+      <div class="file-badge" id="fileBadge">📄 <span id="fileName"></span></div>
+    </div>
+    <input type="file" id="fileInput" accept=".csv"/>
+    <button class="run-btn" id="runBtn" onclick="startAnalysis()">
+      🚀 Start Autonomous Analysis
+    </button>
+  </div>
+
+  <!-- ── DATASET INFO STRIP ── -->
+  <div class="info-grid" id="infoGrid">
+    <div class="info-card"><div class="val" id="infoRows">—</div><div class="lbl">Rows</div></div>
+    <div class="info-card"><div class="val" id="infoCols">—</div><div class="lbl">Columns</div></div>
+    <div class="info-card"><div class="val" id="infoMissing">—</div><div class="lbl">Missing</div></div>
+    <div class="info-card"><div class="val" id="infoNodes">0/9</div><div class="lbl">Nodes Done</div></div>
+  </div>
+
+  <!-- ── PIPELINE ── -->
+  <div class="pipeline-section" id="pipelineSection">
+    <h3>Agent Pipeline</h3>
+    <div class="pipeline" id="pipeline"></div>
+  </div>
+
+  <!-- ── ERROR / RAG PANELS ── -->
+  <div class="error-panel" id="errorPanel">
+    <div class="panel-header"><div class="dot red"></div><h3>⚠ Execution Error</h3></div>
+    <pre class="error-body" id="errorBody"></pre>
+  </div>
+  <div class="rag-panel" id="ragPanel">
+    <div class="panel-header"><div class="dot accent"></div><h3>📚 RAG — Retrieved Documentation</h3></div>
+    <div class="rag-body" id="ragBody"></div>
+  </div>
+
+  <!-- ── MAIN 2-COL GRID ── -->
+  <div class="main-grid" id="mainGrid" style="display:none">
+    <!-- Terminal Log -->
+    <div class="panel" id="logPanel">
+      <div class="panel-header"><div class="dot green" id="logDot"></div><h3>Live Agent Log</h3></div>
+      <div class="panel-body" id="logBody"></div>
+    </div>
+    <!-- Code Panel -->
+    <div class="panel" id="codePanel">
+      <div class="panel-header"><div class="dot amber"></div><h3>Generated Code</h3>
+        <span style="margin-left:auto;font-size:.7rem;color:var(--muted)" id="codeMeta">Waiting…</span>
+      </div>
+      <div class="panel-body">
+        <pre><code class="language-python" id="codeBody">// Code will appear here when the agent generates it…</code></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── RESULTS ── -->
+  <div class="results-section" id="resultsSection">
+    <h2>✅ Analysis Complete</h2>
+    <div class="charts-grid" id="chartsGrid"></div>
+    <div class="report-card">
+      <div class="panel-header"><div class="dot accent"></div><h3>📝 Analysis Report</h3></div>
+      <div class="report-body" id="reportBody"></div>
+    </div>
+    <div class="script-card" style="margin-top:16px">
+      <div class="panel-header"><div class="dot amber"></div><h3>🐍 Generated Python Script</h3></div>
+      <div class="panel-body" style="max-height:none">
+        <pre style="margin:0"><code class="language-python" id="scriptBody"></code></pre>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── LIGHTBOX ── -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <span class="lightbox-close" onclick="closeLightbox()">✕</span>
+  <img id="lightboxImg" src="" alt="chart"/>
+</div>
+
+<!-- ── STATUS BAR ── -->
+<div class="status-bar">
+  <div class="status-dot" id="statusDot"></div>
+  <span id="statusText">Ready — upload a CSV to begin</span>
+  <span style="margin-left:auto;color:var(--border)">Powered by LangGraph + Groq</span>
+</div>
+
+<script>
+// ── Nodes definition ──────────────────────────────────────────────────────────
+const NODES = [
+  {id:'ingestion',   icon:'📥', label:'Ingestion'},
+  {id:'eda',         icon:'🔍', label:'EDA'},
+  {id:'code_gen',    icon:'⚙️',  label:'Code Gen'},
+  {id:'sandbox',     icon:'🧪', label:'Sandbox'},
+  {id:'error_detection', icon:'🔎', label:'Error Det.'},
+  {id:'rag_debug',   icon:'📚', label:'RAG Debug'},
+  {id:'code_repair', icon:'🔧', label:'Code Repair'},
+  {id:'insight_gen', icon:'💡', label:'Insights'},
+  {id:'report_gen',  icon:'📝', label:'Report'},
+];
+
+let selectedFile = null;
+let sessionId    = null;
+let nodesCompleted = 0;
+
+// ── Build pipeline ────────────────────────────────────────────────────────────
+(function buildPipeline(){
+  const container = document.getElementById('pipeline');
+  NODES.forEach((n, i) => {
+    const pill = document.createElement('div');
+    pill.className = 'node-pill';
+    pill.id = `node-${n.id}`;
+    pill.innerHTML = `<span class="icon">${n.icon}</span><span class="name">${n.label}</span>`;
+    const step = document.createElement('div');
+    step.className = 'node-step';
+    step.appendChild(pill);
+    if(i < NODES.length - 1){
+      const conn = document.createElement('div');
+      conn.className = 'connector';
+      conn.id = `conn-${n.id}`;
+      step.appendChild(conn);
+    }
+    container.appendChild(step);
+  });
+})();
+
+// ── Drag & drop ───────────────────────────────────────────────────────────────
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault(); dropzone.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if(f) setFile(f);
+});
+fileInput.addEventListener('change', () => { if(fileInput.files[0]) setFile(fileInput.files[0]); });
+
+function setFile(f){
+  selectedFile = f;
+  document.getElementById('fileName').textContent = f.name;
+  document.getElementById('fileBadge').style.display = 'inline-flex';
+  document.getElementById('runBtn').style.display = 'block';
+}
+
+// ── Start analysis ────────────────────────────────────────────────────────────
+async function startAnalysis(){
+  if(!selectedFile) return;
+  const btn = document.getElementById('runBtn');
+  btn.disabled = true; btn.textContent = '🔄 Uploading…';
+  setStatus('running', 'Uploading dataset…');
+
+  const fd = new FormData();
+  fd.append('file', selectedFile);
+  const res = await fetch('/analyze', {method:'POST', body:fd});
+  const data = await res.json();
+  sessionId = data.session_id;
+
+  btn.textContent = '⚡ Running…';
+  document.getElementById('pipelineSection').style.display = 'block';
+  document.getElementById('mainGrid').style.display = 'grid';
+  document.getElementById('infoGrid').style.display = 'grid';
+  nodesCompleted = 0;
+  setStatus('running', 'Agent running…');
+  connectSSE();
+}
+
+// ── SSE ───────────────────────────────────────────────────────────────────────
+function connectSSE(){
+  const es = new EventSource(`/stream/${sessionId}`);
+  es.onmessage = e => {
+    const ev = JSON.parse(e.data);
+    handleEvent(ev);
+    if(ev.type === 'done'){ es.close(); onDone(); }
+  };
+  es.onerror = () => { es.close(); setStatus('error','Stream disconnected'); };
+}
+
+function handleEvent(ev){
+  switch(ev.type){
+
+    case 'log':
+      addLog(ev.level || 'info', ev.message || '');
+      break;
+
+    case 'node_start':
+      activateNode(ev.node);
+      setStatus('running', `${ev.icon} ${ev.label}`);
+      break;
+
+    case 'node_done':
+      completeNode(ev.node);
+      nodesCompleted++;
+      document.getElementById('infoNodes').textContent = `${nodesCompleted}/9`;
+      break;
+
+    case 'dataset_info':
+      document.getElementById('infoRows').textContent    = (ev.shape||[0])[0].toLocaleString();
+      document.getElementById('infoCols').textContent    = (ev.shape||[0,0])[1];
+      document.getElementById('infoMissing').textContent = Object.values(ev.missing||{}).reduce((a,b)=>a+b,0);
+      break;
+
+    case 'code_generated':
+      showCode(ev.code, ev.lines, 'Generated');
+      break;
+
+    case 'code_repaired':
+      showCode(ev.code, ev.lines, 'Repaired ✓');
+      document.getElementById('ragPanel').classList.remove('show');
+      break;
+
+    case 'exec_error':
+      document.getElementById('errorPanel').classList.add('show');
+      document.getElementById('errorBody').textContent = ev.error || '';
+      break;
+
+    case 'exec_success':
+      document.getElementById('errorPanel').classList.remove('show');
+      break;
+
+    case 'rag_retrieved':
+      document.getElementById('ragPanel').classList.add('show');
+      document.getElementById('ragBody').textContent = ev.context || '';
+      break;
+
+    case 'report_ready':
+      document.getElementById('reportBody').innerHTML = marked.parse(ev.text || '');
+      break;
+
+    case 'results':
+      setTimeout(() => showResults(ev), 800);
+      break;
+
+    case 'fatal_error':
+      addLog('error', '💥 Fatal: ' + ev.error);
+      setStatus('error', 'Agent failed');
+      break;
+  }
+}
+
+// ── Node state helpers ────────────────────────────────────────────────────────
+function activateNode(id){
+  NODES.forEach(n => {
+    const el = document.getElementById(`node-${n.id}`);
+    if(el) el.classList.remove('active');
+  });
+  const el = document.getElementById(`node-${id}`);
+  if(el){ el.classList.add('active'); el.classList.remove('done','error'); }
+  const prev = NODES.findIndex(n => n.id === id);
+  if(prev > 0){
+    const conn = document.getElementById(`conn-${NODES[prev-1].id}`);
+    if(conn) conn.classList.add('active');
+  }
+}
+function completeNode(id){
+  const el = document.getElementById(`node-${id}`);
+  if(el){ el.classList.remove('active'); el.classList.add('done'); }
+}
+
+// ── Log ───────────────────────────────────────────────────────────────────────
+function addLog(level, msg){
+  const body = document.getElementById('logBody');
+  const ts   = new Date().toLocaleTimeString('en',{hour12:false});
+  const line = document.createElement('div');
+  line.className = `log-line ${level}`;
+  line.innerHTML = `<span class="log-ts">${ts}</span>${escHtml(msg)}`;
+  body.appendChild(line);
+  body.scrollTop = body.scrollHeight;
+}
+function escHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── Code panel ────────────────────────────────────────────────────────────────
+function showCode(code, lines, label){
+  const el = document.getElementById('codeBody');
+  el.textContent = code || '';
+  delete el.dataset.highlighted;
+  hljs.highlightElement(el);
+  document.getElementById('codeMeta').textContent = `${label} · ${lines} lines`;
+}
+
+// ── Results ───────────────────────────────────────────────────────────────────
+async function showResults(ev){
+  setStatus('done', `Done — ${(ev.charts||[]).length} charts generated`);
+  document.getElementById('runBtn').textContent = '✅ Analysis Complete';
+
+  // Charts
+  const grid = document.getElementById('chartsGrid');
+  grid.innerHTML = '';
+  (ev.charts||[]).forEach(name => {
+    const card = document.createElement('div');
+    card.className = 'chart-card';
+    card.onclick = () => openLightbox(`/output/${name}`);
+    const label = name.replace(/^chart_\d+_/,'').replace(/_/g,' ').replace('.png','');
+    card.innerHTML = `<img src="/output/${name}?t=${Date.now()}" alt="${name}"/><div class="chart-label">📈 ${label}</div>`;
+    grid.appendChild(card);
+  });
+
+  // Script
+  if(ev.has_script){
+    const r = await fetch('/output/script');
+    const d = await r.json();
+    const sc = document.getElementById('scriptBody');
+    sc.textContent = d.content;
+    delete sc.dataset.highlighted;
+    hljs.highlightElement(sc);
+  }
+
+  document.getElementById('resultsSection').style.display = 'block';
+  document.getElementById('resultsSection').scrollIntoView({behavior:'smooth'});
+}
+
+function onDone(){
+  document.getElementById('runBtn').disabled = false;
+}
+
+// ── Status bar ────────────────────────────────────────────────────────────────
+function setStatus(state, msg){
+  const dot  = document.getElementById('statusDot');
+  const text = document.getElementById('statusText');
+  dot.className = `status-dot ${state}`;
+  text.textContent = msg;
+}
+
+// ── Lightbox ──────────────────────────────────────────────────────────────────
+function openLightbox(src){
+  document.getElementById('lightboxImg').src = src;
+  document.getElementById('lightbox').classList.add('show');
+}
+function closeLightbox(){
+  document.getElementById('lightbox').classList.remove('show');
+}
+document.addEventListener('keydown', e => { if(e.key==='Escape') closeLightbox(); });
+</script>
+</body>
+</html>
